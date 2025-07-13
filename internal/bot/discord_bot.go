@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"free-games-scrape/internal/config"
+	"free-games-scrape/internal/database"
 	"free-games-scrape/internal/models"
 	"free-games-scrape/internal/service"
 )
@@ -17,11 +18,12 @@ type DiscordBot struct {
 	config      *config.DiscordConfig
 	channelID   string
 	gameService *service.GameService
+	database    *database.Database
 }
 
 // NewDiscordBot creates a new Discord bot instance
-func NewDiscordBot(cfg *config.DiscordConfig, gameService *service.GameService) (*DiscordBot, error) {
-	session, err := discordgo.New("Bot " + cfg.BotToken)
+func NewDiscordBot(cfg *config.DiscordConfig, gameService *service.GameService, db *database.Database) (*DiscordBot, error) {
+	session, err := discordgo.New("Bot " + cfg.Token)
 	if err != nil {
 		return nil, fmt.Errorf("error creating Discord session: %w", err)
 	}
@@ -31,6 +33,7 @@ func NewDiscordBot(cfg *config.DiscordConfig, gameService *service.GameService) 
 		config:      cfg,
 		channelID:   cfg.ChannelID,
 		gameService: gameService,
+		database:    db,
 	}
 
 	// Set up event handlers
@@ -45,6 +48,14 @@ func (b *DiscordBot) Start() error {
 	if err != nil {
 		return fmt.Errorf("error opening Discord connection: %w", err)
 	}
+	
+	// Register slash commands
+	err = b.registerSlashCommands()
+	if err != nil {
+		log.Printf("Error registering slash commands: %v", err)
+		// Don't fail startup, just log the error
+	}
+	
 	log.Println("Discord bot is now running")
 	return nil
 }
@@ -67,6 +78,9 @@ func (b *DiscordBot) setupEventHandlers() {
 
 	// Add message handler for commands
 	b.session.AddHandler(b.messageHandler)
+	
+	// Add slash command handler
+	b.session.AddHandler(b.interactionHandler)
 }
 
 // messageHandler handles incoming Discord messages
@@ -177,21 +191,42 @@ func (b *DiscordBot) handleHelpCommand(s *discordgo.Session, m *discordgo.Messag
 	}
 }
 
-// SendGameUpdates sends game updates to the configured Discord channel
+// SendGameUpdates sends game updates to all configured Discord channels
 func (b *DiscordBot) SendGameUpdates(gameCollection *models.GameCollection) error {
-	if err := b.sendFreeNowGames(gameCollection.FreeNow); err != nil {
-		return fmt.Errorf("error sending Free Now games: %w", err)
+	// Get all active server configurations
+	serverConfigs, err := b.database.GetAllActiveServerConfigs()
+	if err != nil {
+		return fmt.Errorf("error getting server configs: %w", err)
 	}
 
-	if err := b.sendComingSoonGames(gameCollection.ComingSoon); err != nil {
-		return fmt.Errorf("error sending Coming Soon games: %w", err)
+	// If no server configs and we have a legacy channel, use that
+	if len(serverConfigs) == 0 && b.channelID != "" {
+		if err := b.sendFreeNowGames(gameCollection.FreeNow, b.channelID); err != nil {
+			return fmt.Errorf("error sending Free Now games to legacy channel: %w", err)
+		}
+		if err := b.sendComingSoonGames(gameCollection.ComingSoon, b.channelID); err != nil {
+			return fmt.Errorf("error sending Coming Soon games to legacy channel: %w", err)
+		}
+		return nil
+	}
+
+	// Send to all configured channels
+	for _, config := range serverConfigs {
+		if err := b.sendFreeNowGames(gameCollection.FreeNow, config.ChannelID); err != nil {
+			log.Printf("Error sending Free Now games to channel %s: %v", config.ChannelID, err)
+			continue
+		}
+		if err := b.sendComingSoonGames(gameCollection.ComingSoon, config.ChannelID); err != nil {
+			log.Printf("Error sending Coming Soon games to channel %s: %v", config.ChannelID, err)
+			continue
+		}
 	}
 
 	return nil
 }
 
 // sendFreeNowGames sends "Free Now" games to Discord with images displayed
-func (b *DiscordBot) sendFreeNowGames(games []models.Game) error {
+func (b *DiscordBot) sendFreeNowGames(games []models.Game, channelID string) error {
 	if len(games) == 0 {
 		return nil
 	}
@@ -231,7 +266,7 @@ func (b *DiscordBot) sendFreeNowGames(games []models.Game) error {
 			})
 		}
 
-		_, err := b.session.ChannelMessageSendEmbed(b.channelID, embed)
+		_, err := b.session.ChannelMessageSendEmbed(channelID, embed)
 		if err != nil {
 			return fmt.Errorf("error sending Free Now message for %s: %w", game.Title, err)
 		}
@@ -242,7 +277,7 @@ func (b *DiscordBot) sendFreeNowGames(games []models.Game) error {
 }
 
 // sendComingSoonGames sends "Coming Soon" games to Discord with images displayed
-func (b *DiscordBot) sendComingSoonGames(games []models.Game) error {
+func (b *DiscordBot) sendComingSoonGames(games []models.Game, channelID string) error {
 	if len(games) == 0 {
 		return nil
 	}
@@ -294,7 +329,7 @@ func (b *DiscordBot) sendComingSoonGames(games []models.Game) error {
 			})
 		}
 
-		_, err := b.session.ChannelMessageSendEmbed(b.channelID, embed)
+		_, err := b.session.ChannelMessageSendEmbed(channelID, embed)
 		if err != nil {
 			return fmt.Errorf("error sending Coming Soon message for %s: %w", game.Title, err)
 		}
@@ -329,4 +364,317 @@ func (b *DiscordBot) SendErrorMessage(errorMsg string) error {
 		return fmt.Errorf("error sending error message: %w", err)
 	}
 	return nil
+}
+
+// registerSlashCommands registers all slash commands with Discord
+func (b *DiscordBot) registerSlashCommands() error {
+	commands := []*discordgo.ApplicationCommand{
+		{
+			Name:        "setup",
+			Description: "Configure which channel to send free game notifications to",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionChannel,
+					Name:        "channel",
+					Description: "The channel to send notifications to",
+					Required:    true,
+					ChannelTypes: []discordgo.ChannelType{
+						discordgo.ChannelTypeGuildText,
+					},
+				},
+			},
+		},
+		{
+			Name:        "games",
+			Description: "Show current free games",
+		},
+		{
+			Name:        "refresh",
+			Description: "Manually check for new games",
+		},
+		{
+			Name:        "status",
+			Description: "Show bot status and configuration",
+		},
+		{
+			Name:        "help",
+			Description: "Show all available commands",
+		},
+	}
+
+	for _, command := range commands {
+		_, err := b.session.ApplicationCommandCreate(b.session.State.User.ID, "", command)
+		if err != nil {
+			return fmt.Errorf("error creating command %s: %w", command.Name, err)
+		}
+	}
+
+	log.Printf("Successfully registered %d slash commands", len(commands))
+	return nil
+}
+
+// interactionHandler handles slash command interactions
+func (b *DiscordBot) interactionHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.ApplicationCommandData().Name == "" {
+		return
+	}
+
+	switch i.ApplicationCommandData().Name {
+	case "setup":
+		b.handleSetupCommand(s, i)
+	case "games":
+		b.handleGamesSlashCommand(s, i)
+	case "refresh":
+		b.handleRefreshSlashCommand(s, i)
+	case "status":
+		b.handleStatusCommand(s, i)
+	case "help":
+		b.handleHelpSlashCommand(s, i)
+	}
+}
+
+// handleSetupCommand handles the /setup slash command
+func (b *DiscordBot) handleSetupCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Check if user has manage channels permission
+	permissions, err := s.UserChannelPermissions(i.Member.User.ID, i.ChannelID)
+	if err != nil {
+		b.respondToInteraction(s, i, "Error checking permissions.", true)
+		return
+	}
+
+	if permissions&discordgo.PermissionManageChannels == 0 {
+		b.respondToInteraction(s, i, "You need 'Manage Channels' permission to use this command.", true)
+		return
+	}
+
+	// Get the channel from the command options
+	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		b.respondToInteraction(s, i, "Please specify a channel.", true)
+		return
+	}
+
+	channelID := options[0].ChannelValue(s).ID
+	guildID := i.GuildID
+
+	// Save the server configuration
+	err = b.database.SaveServerConfig(guildID, channelID)
+	if err != nil {
+		log.Printf("Error saving server config: %v", err)
+		b.respondToInteraction(s, i, "Failed to save configuration. Please try again.", true)
+		return
+	}
+
+	channelMention := fmt.Sprintf("<#%s>", channelID)
+	response := fmt.Sprintf("Successfully configured! I'll send free game notifications to %s", channelMention)
+	b.respondToInteraction(s, i, response, false)
+	
+	log.Printf("Server %s configured to use channel %s", guildID, channelID)
+}
+
+// respondToInteraction sends a response to a slash command interaction
+func (b *DiscordBot) respondToInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, content string, ephemeral bool) {
+	var flags discordgo.MessageFlags
+	if ephemeral {
+		flags = discordgo.MessageFlagsEphemeral
+	}
+
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: content,
+			Flags:   flags,
+		},
+	})
+	if err != nil {
+		log.Printf("Error responding to interaction: %v", err)
+	}
+}
+
+// handleGamesSlashCommand handles the /games slash command
+func (b *DiscordBot) handleGamesSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response since getting games might take time
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	if err != nil {
+		log.Printf("Error deferring interaction response: %v", err)
+		return
+	}
+
+	games, err := b.gameService.GetActiveGames()
+	if err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to get games: %v", err))
+		return
+	}
+
+	if len(games.FreeNow) == 0 && len(games.ComingSoon) == 0 {
+		b.followUpInteraction(s, i, "No free games currently available in the database.")
+		return
+	}
+
+	// Send games to the current channel
+	if err := b.sendFreeNowGames(games.FreeNow, i.ChannelID); err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to send Free Now games: %v", err))
+		return
+	}
+	
+	if err := b.sendComingSoonGames(games.ComingSoon, i.ChannelID); err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to send Coming Soon games: %v", err))
+		return
+	}
+
+	b.followUpInteraction(s, i, "Sent current free games!")
+}
+
+// handleRefreshSlashCommand handles the /refresh slash command
+func (b *DiscordBot) handleRefreshSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response since refreshing might take time
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	if err != nil {
+		log.Printf("Error deferring interaction response: %v", err)
+		return
+	}
+
+	if err := b.gameService.RefreshGames(); err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to refresh games: %v", err))
+		return
+	}
+
+	games, err := b.gameService.GetActiveGames()
+	if err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to get updated games: %v", err))
+		return
+	}
+
+	if len(games.FreeNow) == 0 && len(games.ComingSoon) == 0 {
+		b.followUpInteraction(s, i, "Games refreshed successfully! No free games found.")
+		return
+	}
+
+	// Send updated games to the current channel
+	if err := b.sendFreeNowGames(games.FreeNow, i.ChannelID); err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to send Free Now games: %v", err))
+		return
+	}
+	
+	if err := b.sendComingSoonGames(games.ComingSoon, i.ChannelID); err != nil {
+		b.followUpInteraction(s, i, fmt.Sprintf("Failed to send Coming Soon games: %v", err))
+		return
+	}
+
+	b.followUpInteraction(s, i, "Games refreshed successfully!")
+}
+
+// handleStatusCommand handles the /status slash command
+func (b *DiscordBot) handleStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	guildID := i.GuildID
+	
+	// Get server configuration
+	serverConfig, err := b.database.GetServerConfig(guildID)
+	if err != nil {
+		b.respondToInteraction(s, i, "Error checking server configuration.", true)
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Bot Status",
+		Color: 0x0099ff,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Bot Status",
+				Value:  "Online and running",
+				Inline: true,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Epic Games Store - Free Games Bot",
+		},
+	}
+
+	if serverConfig != nil {
+		channelMention := fmt.Sprintf("<#%s>", serverConfig.ChannelID)
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Notification Channel",
+			Value:  channelMention,
+			Inline: true,
+		})
+	} else {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Notification Channel",
+			Value:  "Not configured (use /setup)",
+			Inline: true,
+		})
+	}
+
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+		},
+	})
+	if err != nil {
+		log.Printf("Error responding to status command: %v", err)
+	}
+}
+
+// handleHelpSlashCommand handles the /help slash command
+func (b *DiscordBot) handleHelpSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	embed := &discordgo.MessageEmbed{
+		Title:       "Free Games Bot Commands",
+		Description: "Available slash commands for the Epic Games Free Games Bot:",
+		Color:       0x0099ff,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "/setup <channel>",
+				Value:  "Configure which channel to send notifications to",
+				Inline: false,
+			},
+			{
+				Name:   "/games",
+				Value:  "Show current free games",
+				Inline: false,
+			},
+			{
+				Name:   "/refresh",
+				Value:  "Manually check for new games",
+				Inline: false,
+			},
+			{
+				Name:   "/status",
+				Value:  "Show bot status and configuration",
+				Inline: false,
+			},
+			{
+				Name:   "/help",
+				Value:  "Show this help message",
+				Inline: false,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Epic Games Store - Free Games Bot",
+		},
+	}
+
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+		},
+	})
+	if err != nil {
+		log.Printf("Error responding to help command: %v", err)
+	}
+}
+
+// followUpInteraction sends a follow-up message to a deferred interaction
+func (b *DiscordBot) followUpInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: content,
+	})
+	if err != nil {
+		log.Printf("Error sending follow-up message: %v", err)
+	}
 }

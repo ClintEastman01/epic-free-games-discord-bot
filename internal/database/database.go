@@ -296,6 +296,18 @@ func (d *Database) SaveServerConfig(guildID, channelID string) error {
 	return nil
 }
 
+// DeactivateServerConfig deactivates a server configuration
+func (d *Database) DeactivateServerConfig(guildID, channelID string) error {
+	query := `UPDATE server_configs SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ? AND channel_id = ?`
+	_, err := d.db.Exec(query, guildID, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate server config: %w", err)
+	}
+	
+	log.Printf("Deactivated server config for guild %s, channel %s", guildID, channelID)
+	return nil
+}
+
 // createServerConfigTable creates the server_configs table
 func (d *Database) createServerConfigTable() error {
 	query := `

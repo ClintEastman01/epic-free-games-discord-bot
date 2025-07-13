@@ -22,6 +22,7 @@ type Config struct {
 type DiscordConfig struct {
 	Token           string
 	ClientID        string
+	ChannelID       string
 	MaxRetries      int
 	RetryDelay      time.Duration
 	CommandTimeout  time.Duration
@@ -76,6 +77,8 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DISCORD_CLIENT_ID environment variable is required for bot verification")
 	}
 
+	channelID := strings.TrimSpace(os.Getenv("DISCORD_CHANNEL_ID"))
+
 	// Validate token format (basic check)
 	if len(token) < 50 || !strings.Contains(token, ".") {
 		return nil, fmt.Errorf("invalid Discord bot token format")
@@ -106,6 +109,7 @@ func Load() (*Config, error) {
 		Discord: DiscordConfig{
 			Token:           token,
 			ClientID:        clientID,
+			ChannelID:       channelID,
 			MaxRetries:      getEnvInt("DISCORD_MAX_RETRIES", 3),
 			RetryDelay:      getEnvDuration("DISCORD_RETRY_DELAY", 5*time.Second),
 			CommandTimeout:  getEnvDuration("DISCORD_COMMAND_TIMEOUT", 30*time.Second),
@@ -157,6 +161,7 @@ func (c *Config) Validate() error {
 	if c.Discord.ClientID == "" {
 		return fmt.Errorf("discord client ID is required")
 	}
+
 
 	if c.Scraper.ChromePath == "" {
 		return fmt.Errorf("chrome path not found - please install Chrome/Chromium or set CHROME_PATH")
