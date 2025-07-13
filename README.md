@@ -195,5 +195,3 @@ This bot is for educational and personal use only. It scrapes publicly available
 ---
 
 **Made with love for the gaming community**
-
-*Last updated: January 2025*
