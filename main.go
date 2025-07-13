@@ -3,9 +3,16 @@ package main
 import (
 	"free-games-scrape/internal/app"
 	"log"
+	
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found or error loading it, using system environment variables")
+	}
+
 	log.Println("Note: main.go is deprecated. Please use 'go run cmd/bot/main.go' instead.")
 	log.Println("Running application with new modular structure...")
 

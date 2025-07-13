@@ -40,7 +40,7 @@ func (s *EpicScraper) ScrapeGames() ([]models.Game, error) {
 	defer cancel()
 
 	// Set timeout
-	ctx, cancel = context.WithTimeout(ctx, time.Duration(s.config.Timeout)*time.Second)
+	ctx, cancel = context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
 	var games []models.Game
@@ -52,7 +52,7 @@ func (s *EpicScraper) ScrapeGames() ([]models.Game, error) {
 		err := chromedp.Run(ctx,
 			chromedp.Navigate("https://store.epicgames.com/en-US/free-games"),
 			chromedp.WaitVisible("body", chromedp.ByQuery),
-			chromedp.Sleep(2*time.Second), // Wait for dynamic content to load
+			chromedp.Sleep(5*time.Second), // Wait longer for dynamic content to load
 			chromedp.Evaluate(s.getScrapingScript(), &games),
 		)
 		

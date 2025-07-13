@@ -10,6 +10,14 @@ import (
 	"free-games-scrape/internal/models"
 )
 
+// ServerConfig represents a Discord server configuration
+type ServerConfig struct {
+	GuildID   string `json:"guild_id"`
+	ChannelID string `json:"channel_id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 // Database handles SQLite operations
 type Database struct {
 	db *sql.DB
@@ -26,6 +34,10 @@ func New(dbPath string) (*Database, error) {
 	
 	if err := database.createTables(); err != nil {
 		return nil, fmt.Errorf("failed to create tables: %w", err)
+	}
+
+	if err := database.createServerConfigTable(); err != nil {
+		return nil, fmt.Errorf("failed to create server config table: %w", err)
 	}
 
 	return database, nil
@@ -201,4 +213,110 @@ func (d *Database) GetGameByTitle(title string) (*models.Game, error) {
 	}
 
 	return &game, nil
+}
+
+// GetServerCount returns the total number of configured servers
+func (d *Database) GetServerCount() (int, error) {
+	query := `SELECT COUNT(*) FROM server_configs WHERE active = 1`
+	
+	var count int
+	err := d.db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get server count: %w", err)
+	}
+	
+	return count, nil
+}
+
+// GetAllActiveServerConfigs returns all active server configurations
+func (d *Database) GetAllActiveServerConfigs() ([]*ServerConfig, error) {
+	query := `
+		SELECT guild_id, channel_id, created_at, updated_at
+		FROM server_configs 
+		WHERE active = 1
+		ORDER BY created_at
+	`
+	
+	rows, err := d.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query server configs: %w", err)
+	}
+	defer rows.Close()
+	
+	var configs []*ServerConfig
+	for rows.Next() {
+		var config ServerConfig
+		err := rows.Scan(&config.GuildID, &config.ChannelID, &config.CreatedAt, &config.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan server config: %w", err)
+		}
+		configs = append(configs, &config)
+	}
+	
+	return configs, nil
+}
+
+// GetServerConfig retrieves server configuration by guild ID
+func (d *Database) GetServerConfig(guildID string) (*ServerConfig, error) {
+	query := `
+		SELECT guild_id, channel_id, created_at, updated_at
+		FROM server_configs 
+		WHERE guild_id = ? AND active = 1
+		LIMIT 1
+	`
+	
+	var config ServerConfig
+	err := d.db.QueryRow(query, guildID).Scan(
+		&config.GuildID, &config.ChannelID, &config.CreatedAt, &config.UpdatedAt,
+	)
+	
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get server config: %w", err)
+	}
+	
+	return &config, nil
+}
+
+// SaveServerConfig saves or updates server configuration
+func (d *Database) SaveServerConfig(guildID, channelID string) error {
+	query := `
+		INSERT OR REPLACE INTO server_configs (guild_id, channel_id, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+	`
+	
+	_, err := d.db.Exec(query, guildID, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to save server config: %w", err)
+	}
+	
+	log.Printf("Saved server config for guild %s, channel %s", guildID, channelID)
+	return nil
+}
+
+// createServerConfigTable creates the server_configs table
+func (d *Database) createServerConfigTable() error {
+	query := `
+	CREATE TABLE IF NOT EXISTS server_configs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		guild_id TEXT NOT NULL UNIQUE,
+		channel_id TEXT NOT NULL,
+		active INTEGER DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_server_configs_guild_id ON server_configs(guild_id);
+	CREATE INDEX IF NOT EXISTS idx_server_configs_active ON server_configs(active);
+	`
+
+	_, err := d.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("failed to create server_configs table: %w", err)
+	}
+
+	log.Println("Server configs table created/verified")
+	return nil
 }

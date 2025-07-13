@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Games Bot - Complete Documentation</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/documentation.css">
+    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+    <meta name="description" content="Complete documentation for the Free Games Discord Bot - Epic Games Store notifications">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>🎮 Free Games Bot</h1>
+                    <p>Epic Games Store Discord Bot - Complete Documentation</p>
+                </div>
+                <div class="stats" id="bot-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="server-count">-</span>
+                        <span class="stat-label">Servers</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="game-count">-</span>
+                        <span class="stat-label">Active Games</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="status">Online</span>
+                        <span class="stat-label">Status</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="navigation">
+            <div class="nav-container">
+                <a href="#overview" class="nav-link active" data-section="overview">Overview</a>
+                <a href="#setup" class="nav-link" data-section="setup">Setup Guide</a>
+                <a href="#commands" class="nav-link" data-section="commands">Commands</a>
+                <a href="#features" class="nav-link" data-section="features">Features</a>
+                <a href="#architecture" class="nav-link" data-section="architecture">Architecture</a>
+                <a href="#api" class="nav-link" data-section="api">API</a>
+                <a href="#troubleshooting" class="nav-link" data-section="troubleshooting">Troubleshooting</a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <section id="overview" class="content-section active">
+                <div class="section-header">
+                    <h2>🎮 Overview</h2>
+                    <p>A powerful Discord bot that automatically monitors Epic Games Store for free games and notifies your Discord server.</p>
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🔄</div>
+                        <h3>Automatic Monitoring</h3>
+                        <p>Checks Epic Games Store every 6 hours for new free games</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💾</div>
+                        <h3>Smart Caching</h3>
+                        <p>SQLite database prevents duplicate notifications</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Multi-Server Support</h3>
+                        <p>Configure different channels for each Discord server</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Instant Commands</h3>
+                        <p>Slash commands and text commands for immediate responses</p>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h3>🚀 How It Works</h3>
+                    <ol>
+                        <li><strong>Web Scraping:</strong> Uses Chrome/Chromium to scrape Epic Games Store</li>
+                        <li><strong>Data Processing:</strong> Extracts game information and categorizes by availability</li>
+                        <li><strong>Database Storage:</strong> Stores games in SQLite to prevent duplicates</li>
+                        <li><strong>Discord Integration:</strong> Sends rich embeds with game images to configured channels</li>
+                        <li><strong>Smart Notifications:</strong> Only notifies about truly new games</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Setup Guide Section -->
+            <section id="setup" class="content-section">
+                <div class="section-header">
+                    <h2>⚙️ Setup Guide</h2>
+                    <p>Get your Free Games Bot up and running in minutes</p>
+                </div>
+
+                <div class="setup-steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Invite the Bot</h3>
+                            <p>Add the bot to your Discord server with the proper permissions:</p>
+                            <div class="code-block">
+                                <code>Required Permissions: Send Messages, Use Slash Commands, Embed Links, Attach Files</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Configure Channel</h3>
+                            <p>Use the setup command to configure which channel receives notifications:</p>
+                            <div class="command-example">
+                                <code>/setup #your-channel</code>
+                            </div>
+                            <p class="note">💡 Only server administrators can run this command</p>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Test the Bot</h3>
+                            <p>Verify everything is working by checking current games:</p>
+                            <div class="command-example">
+                                <code>/games</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Enjoy Automatic Updates</h3>
+                            <p>The bot will now automatically notify your channel about new free games every 6 hours!</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Commands Section -->
+            <section id="commands" class="content-section">
+                <div class="section-header">
+                    <h2>🎯 Commands</h2>
+                    <p>Complete list of available commands and their usage</p>
+                </div>
+
+                <div class="commands-grid">
+                    <!-- Slash Commands -->
+                    <div class="command-category">
+                        <h3>Slash Commands</h3>
+                        <div class="command-list">
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>/setup &lt;channel&gt;</code>
+                                    <span class="badge admin">Admin Only</span>
+                                </div>
+                                <p>Configure the bot for this server. Specify which channel should receive free game notifications.</p>
+                                <div class="command-example">
+                                    <strong>Example:</strong> <code>/setup #free-games</code>
+                                </div>
+                            </div>
+
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>/games</code>
+                                </div>
+                                <p>Display all currently available free games from the database.</p>
+                            </div>
+
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>/refresh</code>
+                                    <span class="badge admin">Admin Only</span>
+                                </div>
+                                <p>Manually trigger a refresh of games from Epic Games Store.</p>
+                            </div>
+
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>/status</code>
+                                </div>
+                                <p>Show bot status, server configuration, and statistics.</p>
+                            </div>
+
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>/help</code>
+                                </div>
+                                <p>Display help information and available commands.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Text Commands -->
+                    <div class="command-category">
+                        <h3>Text Commands</h3>
+                        <div class="command-list">
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>!games</code> or <code>!freegames</code>
+                                </div>
+                                <p>Show current free games from the database.</p>
+                            </div>
+
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>!refresh</code> or <code>!update</code>
+                                </div>
+                                <p>Manually refresh games from Epic Games Store.</p>
+                            </div>
+
+                            <div class="command-item">
+                                <div class="command-header">
+                                    <code>!help</code>
+                                </div>
+                                <p>Show available commands.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>📝 Command Notes</h4>
+                    <ul>
+                        <li>Text commands only work in the configured channel for your server</li>
+                        <li>Slash commands work server-wide but require initial setup</li>
+                        <li>Admin commands require Discord Administrator permission</li>
+                        <li>The bot responds instantly using cached data from the database</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Features Section -->
+            <section id="features" class="content-section">
+                <div class="section-header">
+                    <h2>✨ Features</h2>
+                    <p>Comprehensive feature overview</p>
+                </div>
+
+                <div class="features-detailed">
+                    <div class="feature-section">
+                        <h3>🔄 Automatic Monitoring</h3>
+                        <ul>
+                            <li><strong>6-Hour Intervals:</strong> Checks Epic Games Store every 6 hours</li>
+                            <li><strong>Startup Check:</strong> Runs immediately when bot starts</li>
+                            <li><strong>Retry Logic:</strong> 3 attempts with 5-second delays on failures</li>
+                            <li><strong>Error Handling:</strong> Graceful failure with user notifications</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-section">
+                        <h3>💾 Smart Database System</h3>
+                        <ul>
+                            <li><strong>SQLite Storage:</strong> Lightweight, file-based database</li>
+                            <li><strong>Duplicate Prevention:</strong> Only notifies about new games</li>
+                            <li><strong>Data Persistence:</strong> Survives bot restarts</li>
+                            <li><strong>Automatic Cleanup:</strong> Removes games older than 30 days</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-section">
+                        <h3>🎯 Multi-Server Support</h3>
+                        <ul>
+                            <li><strong>Per-Server Configuration:</strong> Each server has its own settings</li>
+                            <li><strong>Channel Selection:</strong> Configure different channels per server</li>
+                            <li><strong>Welcome Messages:</strong> Automatic setup guidance for new servers</li>
+                            <li><strong>Permission Checks:</strong> Admin-only configuration commands</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-section">
+                        <h3>🎨 Rich Discord Integration</h3>
+                        <ul>
+                            <li><strong>Embed Messages:</strong> Beautiful, formatted notifications</li>
+                            <li><strong>Game Images:</strong> Full-size game artwork in messages</li>
+                            <li><strong>Color Coding:</strong> Green for "Free Now", Blue for "Coming Soon"</li>
+                            <li><strong>Detailed Information:</strong> Game status, availability periods</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-section">
+                        <h3>🔧 Advanced Web Scraping</h3>
+                        <ul>
+                            <li><strong>Chrome/Chromium:</strong> Uses real browser for JavaScript rendering</li>
+                            <li><strong>Cross-Platform:</strong> Auto-detects Chrome path on Windows, macOS, Linux</li>
+                            <li><strong>Headless Mode:</strong> Runs without GUI for server deployment</li>
+                            <li><strong>Dynamic Content:</strong> Waits for JavaScript-loaded content</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-section">
+                        <h3>⚡ Performance & Reliability</h3>
+                        <ul>
+                            <li><strong>Instant Responses:</strong> Commands use cached database data</li>
+                            <li><strong>Graceful Shutdown:</strong> Handles Ctrl+C and system signals</li>
+                            <li><strong>Error Recovery:</strong> Continues operation after scraping failures</li>
+                            <li><strong>Resource Efficient:</strong> Minimal memory and CPU usage</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Architecture Section -->
+            <section id="architecture" class="content-section">
+                <div class="section-header">
+                    <h2>🏗️ Architecture</h2>
+                    <p>Technical overview of the bot's architecture and components</p>
+                </div>
+
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h3>🎮 Discord Bot Layer</h3>
+                        <div class="arch-components">
+                            <div class="component">
+                                <strong>DiscordBot</strong>
+                                <p>Handles Discord interactions, slash commands, and message formatting</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <h3>⚙️ Service Layer</h3>
+                        <div class="arch-components">
+                            <div class="component">
+                                <strong>GameService</strong>
+                                <p>Business logic for game management, refresh operations, and data processing</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <h3>🔍 Scraper Layer</h3>
+                        <div class="arch-components">
+                            <div class="component">
+                                <strong>EpicScraper</strong>
+                                <p>Web scraping using Chrome/Chromium to extract game data from Epic Games Store</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="arch-layer">
+                        <h3>💾 Database Layer</h3>
+                        <div class="arch-components">
+                            <div class="component">
+                                <strong>Database</strong>
+                                <p>SQLite operations for game storage, server configurations, and data persistence</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tech-stack">
+                    <h3>🛠️ Technology Stack</h3>
+                    <div class="tech-grid">
+                        <div class="tech-item">
+                            <strong>Go</strong>
+                            <p>Main programming language</p>
+                        </div>
+                        <div class="tech-item">
+                            <strong>DiscordGo</strong>
+                            <p>Discord API library</p>
+                        </div>
+                        <div class="tech-item">
+                            <strong>ChromeDP</strong>
+                            <p>Chrome DevTools Protocol for web scraping</p>
+                        </div>
+                        <div class="tech-item">
+                            <strong>SQLite</strong>
+                            <p>Embedded database</p>
+                        </div>
+                        <div class="tech-item">
+                            <strong>HTML/CSS/JS</strong>
+                            <p>Web documentation interface</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="data-flow">
+                    <h3>📊 Data Flow</h3>
+                    <ol>
+                        <li><strong>Scheduled Trigger:</strong> Timer triggers every 6 hours</li>
+                        <li><strong>Web Scraping:</strong> EpicScraper extracts game data from Epic Games Store</li>
+                        <li><strong>Data Processing:</strong> GameService processes and validates scraped data</li>
+                        <li><strong>Database Storage:</strong> New games are saved to SQLite database</li>
+                        <li><strong>Change Detection:</strong> System identifies truly new games since last check</li>
+                        <li><strong>Discord Notification:</strong> DiscordBot sends rich embeds to configured channels</li>
+                        <li><strong>Command Handling:</strong> Users can query cached data instantly via commands</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- API Section -->
+            <section id="api" class="content-section">
+                <div class="section-header">
+                    <h2>🔌 API Endpoints</h2>
+                    <p>HTTP API for bot status and game information</p>
+                </div>
+
+                <div class="api-endpoints">
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code>/api/status</code>
+                        </div>
+                        <p>Get bot status and statistics</p>
+                        <div class="api-response">
+                            <h4>Response:</h4>
+                            <pre><code>{
+  "status": "online",
+  "server_count": 42,
+  "game_count": 3,
+  "last_update": "2024-01-15T10:30:00Z",
+  "uptime": "24/7"
+}</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code>/api/games</code>
+                        </div>
+                        <p>Get current game statistics</p>
+                        <div class="api-response">
+                            <h4>Response:</h4>
+                            <pre><code>{
+  "free_now": 2,
+  "coming_soon": 1,
+  "total": 3,
+  "last_updated": "2024-01-15T10:30:00Z"
+}</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="endpoint">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code>/help</code>
+                        </div>
+                        <p>This documentation page</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Troubleshooting Section -->
+            <section id="troubleshooting" class="content-section">
+                <div class="section-header">
+                    <h2>🔧 Troubleshooting</h2>
+                    <p>Common issues and solutions</p>
+                </div>
+
+                <div class="troubleshooting-grid">
+                    <div class="issue">
+                        <h3>❌ Bot not responding to commands</h3>
+                        <div class="solution">
+                            <h4>Solutions:</h4>
+                            <ul>
+                                <li>Ensure the bot has been configured with <code>/setup</code></li>
+                                <li>Check that you're using commands in the configured channel</li>
+                                <li>Verify the bot has necessary permissions</li>
+                                <li>Try using slash commands instead of text commands</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="issue">
+                        <h3>❌ No game notifications</h3>
+                        <div class="solution">
+                            <h4>Solutions:</h4>
+                            <ul>
+                                <li>Check if there are actually new free games available</li>
+                                <li>Verify the bot is online and running</li>
+                                <li>Use <code>/refresh</code> to manually trigger a check</li>
+                                <li>Ensure the configured channel still exists</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="issue">
+                        <h3>❌ Setup command fails</h3>
+                        <div class="solution">
+                            <h4>Solutions:</h4>
+                            <ul>
+                                <li>Ensure you have Administrator permissions</li>
+                                <li>Check that the bot can send messages to the selected channel</li>
+                                <li>Try mentioning the channel: <code>/setup #channel-name</code></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="issue">
+                        <h3>❌ Images not showing in embeds</h3>
+                        <div class="solution">
+                            <h4>Solutions:</h4>
+                            <ul>
+                                <li>Ensure the bot has "Embed Links" permission</li>
+                                <li>Check your Discord client settings for embed display</li>
+                                <li>Some images may be temporarily unavailable from Epic Games</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="support-info">
+                    <h3>📞 Need More Help?</h3>
+                    <p>If you're still experiencing issues:</p>
+                    <ul>
+                        <li>Check the bot's status with <code>/status</code></li>
+                        <li>Try the <code>/refresh</code> command to test connectivity</li>
+                        <li>Ensure your server meets all requirements</li>
+                        <li>Contact the bot administrator for technical support</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Free Games Bot</h4>
+                    <p>Epic Games Store Discord notifications made easy</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="#overview">Overview</a></li>
+                        <li><a href="#setup">Setup</a></li>
+                        <li><a href="#commands">Commands</a></li>
+                        <li><a href="#features">Features</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Technical</h4>
+                    <ul>
+                        <li><a href="#architecture">Architecture</a></li>
+                        <li><a href="#api">API</a></li>
+                        <li><a href="#troubleshooting">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Status</h4>
+                    <p>Bot Status: <span id="footer-status" class="status-online">Online</span></p>
+                    <p>Last Updated: <span id="last-updated">-</span></p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Free Games Bot. Built with ❤️ for the gaming community.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/documentation.js"></script>
+</body>
+</html>

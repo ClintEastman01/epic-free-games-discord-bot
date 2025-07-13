@@ -1,16 +1,21 @@
 package app
 
 import (
+	"context"
+	"free-games-scrape/internal/bot"
+	"free-games-scrape/internal/config"
+	"free-games-scrape/internal/database"
+	"free-games-scrape/internal/logger"
+	"free-games-scrape/internal/metrics"
+	"free-games-scrape/internal/ratelimit"
+	"free-games-scrape/internal/scraper"
+	"free-games-scrape/internal/security"
+	"free-games-scrape/internal/service"
+	"free-games-scrape/internal/web"
 	"log"
 	"os"
 	"os/signal"
 	"time"
-
-	"free-games-scrape/internal/bot"
-	"free-games-scrape/internal/config"
-	"free-games-scrape/internal/database"
-	"free-games-scrape/internal/scraper"
-	"free-games-scrape/internal/service"
 )
 
 // App represents the main application
@@ -19,16 +24,39 @@ type App struct {
 	discordBot  *bot.DiscordBot
 	gameService *service.GameService
 	db          *database.Database
+	webServer   *web.WebServer
+	logger      *logger.Logger
+	metrics     *metrics.Metrics
+	rateLimiter *ratelimit.DiscordRateLimiter
+	validator   *security.Validator
 	lastCheck   time.Time
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
-// New creates a new application instance
+// New creates a new application instance with enhanced features
 func New() (*App, error) {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
 	}
+
+	// Initialize logger
+	appLogger := logger.New(logger.LogLevel(cfg.App.LogLevel), cfg.App.Environment)
+	appLogger.Info("Starting Free Games Bot v2.0")
+
+	// Validate Discord token
+	validator := security.NewValidator()
+	if err := validator.ValidateDiscordToken(cfg.Discord.Token); err != nil {
+		return nil, err
+	}
+
+	// Initialize metrics
+	appMetrics := metrics.New()
+
+	// Initialize rate limiter
+	rateLimiter := ratelimit.NewDiscordRateLimiter()
 
 	// Initialize database
 	db, err := database.New(cfg.Database.Path)
@@ -42,23 +70,44 @@ func New() (*App, error) {
 	// Initialize game service
 	gameService := service.NewGameService(db, epicScraper)
 
-	// Initialize Discord bot with game service
-	discordBot, err := bot.NewDiscordBot(&cfg.Discord, gameService)
+	// Initialize Discord bot with game service and database
+	discordBot, err := bot.NewDiscordBot(&cfg.Discord, gameService, db)
 	if err != nil {
 		return nil, err
 	}
+
+	// Initialize web server for documentation
+	webServer := web.NewWebServer(cfg.Web.Port, gameService, db)
+
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return &App{
 		config:      cfg,
 		discordBot:  discordBot,
 		gameService: gameService,
 		db:          db,
+		webServer:   webServer,
+		logger:      appLogger,
+		metrics:     appMetrics,
+		rateLimiter: rateLimiter,
+		validator:   validator,
 		lastCheck:   time.Now(),
+		ctx:         ctx,
+		cancel:      cancel,
 	}, nil
 }
 
 // Run starts the application
 func (a *App) Run() error {
+	// Start web server in a goroutine
+	go func() {
+		log.Println("Starting web server for documentation...")
+		if err := a.webServer.Start(); err != nil {
+			log.Printf("Web server error: %v", err)
+		}
+	}()
+
 	// Start Discord bot
 	if err := a.discordBot.Start(); err != nil {
 		return err
@@ -116,7 +165,7 @@ func (a *App) performGameCheck() error {
 		if err := a.discordBot.SendGameUpdates(newGames); err != nil {
 			return err
 		}
-		log.Printf("Sent updates for %d new Free Now games and %d new Coming Soon games", 
+		log.Printf("Sent updates for %d new Free Now games and %d new Coming Soon games",
 			len(newGames.FreeNow), len(newGames.ComingSoon))
 	} else {
 		log.Println("No new games found since last check")
@@ -127,3 +176,4 @@ func (a *App) performGameCheck() error {
 
 	return nil
 }
+

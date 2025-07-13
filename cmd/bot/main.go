@@ -4,9 +4,15 @@ import (
 	"log"
 
 	"free-games-scrape/internal/app"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found or error loading it, using system environment variables")
+	}
+
 	// Create and run the application
 	application, err := app.New()
 	if err != nil {
