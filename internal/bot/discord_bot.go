@@ -74,6 +74,7 @@ func (b *DiscordBot) setupEventHandlers() {
 
 	b.session.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
 		log.Printf("Joined guild: %s (ID: %s)", g.Name, g.ID)
+		b.sendWelcomeMessage(s, g)
 	})
 
 	// Add message handler for commands
@@ -676,5 +677,65 @@ func (b *DiscordBot) followUpInteraction(s *discordgo.Session, i *discordgo.Inte
 	})
 	if err != nil {
 		log.Printf("Error sending follow-up message: %v", err)
+	}
+}
+
+// sendWelcomeMessage sends a welcome message when the bot joins a new guild
+func (b *DiscordBot) sendWelcomeMessage(s *discordgo.Session, g *discordgo.GuildCreate) {
+	// Find a suitable channel to send the welcome message
+	// Try to find a general channel, system channel, or the first text channel we can send to
+	var targetChannelID string
+	
+	// First, try the system channel if it exists
+	if g.SystemChannelID != "" {
+		targetChannelID = g.SystemChannelID
+	} else {
+		// Find the first text channel we have permission to send messages to
+		for _, channel := range g.Channels {
+			if channel.Type == discordgo.ChannelTypeGuildText {
+				// Check if we can send messages to this channel
+				permissions, err := s.UserChannelPermissions(s.State.User.ID, channel.ID)
+				if err == nil && permissions&discordgo.PermissionSendMessages != 0 {
+					targetChannelID = channel.ID
+					break
+				}
+			}
+		}
+	}
+	
+	// If we couldn't find a suitable channel, log and return
+	if targetChannelID == "" {
+		log.Printf("Could not find a suitable channel to send welcome message in guild %s", g.Name)
+		return
+	}
+	
+	// Create the welcome message embed
+	embed := &discordgo.MessageEmbed{
+		Title:       "Thanks for adding Free Games Bot!",
+		Description: "I'll help you stay updated on free games from Epic Games Store.",
+		Color:       0x0099ff,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Getting Started",
+				Value:  "Use `/setup` to configure which channel I should send notifications to.",
+				Inline: false,
+			},
+			{
+				Name:   "Available Commands",
+				Value:  "`/games` - Show current free games\n`/refresh` - Manually check for new games\n`/status` - Show bot status\n`/help` - Show all commands",
+				Inline: false,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Epic Games Store - Free Games Bot",
+		},
+	}
+	
+	// Send the welcome message
+	_, err := s.ChannelMessageSendEmbed(targetChannelID, embed)
+	if err != nil {
+		log.Printf("Error sending welcome message to guild %s: %v", g.Name, err)
+	} else {
+		log.Printf("Sent welcome message to guild %s in channel %s", g.Name, targetChannelID)
 	}
 }
