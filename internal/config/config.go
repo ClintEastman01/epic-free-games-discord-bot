@@ -10,8 +10,9 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Discord DiscordConfig
-	Scraper ScraperConfig
+	Discord  DiscordConfig
+	Scraper  ScraperConfig
+	Database DatabaseConfig
 }
 
 // DiscordConfig holds Discord-related configuration
@@ -25,6 +26,11 @@ type ScraperConfig struct {
 	ChromePath string
 	UserAgent  string
 	Timeout    int // in seconds
+}
+
+// DatabaseConfig holds database-related configuration
+type DatabaseConfig struct {
+	Path string
 }
 
 // Load loads configuration from environment variables
@@ -44,6 +50,9 @@ func Load() (*Config, error) {
 			ChromePath: getDefaultChromePath(),
 			UserAgent:  "Mozilla/5.0 (compatible; EpicGamesBotScraper/1.0)",
 			Timeout:    90,
+		},
+		Database: DatabaseConfig{
+			Path: getEnvOrDefault("DATABASE_PATH", "games.db"),
 		},
 	}
 
@@ -106,4 +115,12 @@ func getDefaultChromePath() string {
 	default:
 		return ""
 	}
+}
+
+// getEnvOrDefault returns environment variable value or default if not set
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
