@@ -50,25 +50,85 @@ func (d *Database) Close() error {
 
 // createTables creates the necessary database tables
 func (d *Database) createTables() error {
+	// First check if the table exists
+	var tableName string
+	err := d.db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='games'").Scan(&tableName)
+	
+	if err == nil {
+		// Table exists, check if we need to migrate
+		var hasUniqueConstraint bool
+		err = d.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_games_title_free_to'").Scan(&hasUniqueConstraint)
+		
+		if err == nil && !hasUniqueConstraint {
+			// Need to migrate the table structure
+			log.Println("Migrating games table to support composite key...")
+			
+			// Create a new table with the desired structure
+			_, err = d.db.Exec(`
+				CREATE TABLE IF NOT EXISTS games_new (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					title TEXT NOT NULL,
+					image_url TEXT,
+					status TEXT NOT NULL,
+					free_from TEXT,
+					free_to TEXT,
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+					UNIQUE(title, free_to)
+				);
+				
+				-- Copy data from old table
+				INSERT OR IGNORE INTO games_new 
+					(id, title, image_url, status, free_from, free_to, created_at, updated_at, last_seen)
+				SELECT 
+					id, title, image_url, status, free_from, free_to, created_at, updated_at, last_seen
+				FROM games;
+				
+				-- Drop old table
+				DROP TABLE games;
+				
+				-- Rename new table
+				ALTER TABLE games_new RENAME TO games;
+				
+				-- Recreate indexes
+				CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
+				CREATE INDEX IF NOT EXISTS idx_games_title ON games(title);
+				CREATE INDEX IF NOT EXISTS idx_games_last_seen ON games(last_seen);
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_games_title_free_to ON games(title, free_to);
+			`)
+			
+			if err != nil {
+				return fmt.Errorf("failed to migrate games table: %w", err)
+			}
+			
+			log.Println("Successfully migrated games table")
+			return nil
+		}
+	}
+	
+	// Create table if it doesn't exist or if there was an error checking
 	query := `
 	CREATE TABLE IF NOT EXISTS games (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		title TEXT NOT NULL UNIQUE,
+		title TEXT NOT NULL,
 		image_url TEXT,
 		status TEXT NOT NULL,
 		free_from TEXT,
 		free_to TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+		last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(title, free_to)
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
 	CREATE INDEX IF NOT EXISTS idx_games_title ON games(title);
 	CREATE INDEX IF NOT EXISTS idx_games_last_seen ON games(last_seen);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_games_title_free_to ON games(title, free_to);
 	`
 
-	_, err := d.db.Exec(query)
+	_, err = d.db.Exec(query)
 	return err
 }
 
@@ -80,9 +140,23 @@ func (d *Database) SaveGames(games []models.Game) error {
 	}
 	defer tx.Rollback()
 
+	// First, mark all games as not seen in this update
+	_, err = tx.Exec(`UPDATE games SET last_seen = datetime('now', '-1 day') WHERE 1=1`)
+	if err != nil {
+		return fmt.Errorf("failed to mark games as not seen: %w", err)
+	}
+
+	// Now insert or update each game
+	// We'll use title AND free_to as a composite key to handle cases where the same game becomes free again
 	stmt, err := tx.Prepare(`
-		INSERT OR REPLACE INTO games (title, image_url, status, free_from, free_to, updated_at, last_seen)
+		INSERT INTO games (title, image_url, status, free_from, free_to, updated_at, last_seen)
 		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(title, free_to) DO UPDATE SET
+			image_url = excluded.image_url,
+			status = excluded.status,
+			free_from = excluded.free_from,
+			updated_at = CURRENT_TIMESTAMP,
+			last_seen = CURRENT_TIMESTAMP
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)

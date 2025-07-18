@@ -29,7 +29,7 @@ func (gs *GameService) RefreshGames() error {
 	log.Println("Starting game refresh...")
 	
 	// Scrape games from Epic Games Store
-	scrapedGames, err := gs.scraper.ScrapeGames()
+	scrapedGames, err := gs.ScrapeGames()
 	if err != nil {
 		return fmt.Errorf("failed to scrape games: %w", err)
 	}
@@ -40,13 +40,8 @@ func (gs *GameService) RefreshGames() error {
 	}
 
 	// Save games to database
-	if err := gs.db.SaveGames(scrapedGames); err != nil {
+	if err := gs.SaveGames(scrapedGames); err != nil {
 		return fmt.Errorf("failed to save games to database: %w", err)
-	}
-
-	// Cleanup old games
-	if err := gs.db.CleanupOldGames(); err != nil {
-		log.Printf("Warning: failed to cleanup old games: %v", err)
 	}
 
 	log.Printf("Successfully refreshed %d games", len(scrapedGames))
@@ -83,4 +78,32 @@ func (gs *GameService) ShouldRefresh(maxAge time.Duration) (bool, error) {
 	// For now, we'll refresh based on time intervals
 	// In a more sophisticated implementation, you could track last refresh time in the database
 	return true, nil
+}
+
+// ScrapeGames scrapes games from Epic Games Store without saving to database
+func (gs *GameService) ScrapeGames() ([]models.Game, error) {
+	log.Println("Scraping games from Epic Games Store...")
+	
+	scrapedGames, err := gs.scraper.ScrapeGames()
+	if err != nil {
+		return nil, fmt.Errorf("failed to scrape games: %w", err)
+	}
+
+	log.Printf("Successfully scraped %d games", len(scrapedGames))
+	return scrapedGames, nil
+}
+
+// SaveGames saves games to the database
+func (gs *GameService) SaveGames(games []models.Game) error {
+	if err := gs.db.SaveGames(games); err != nil {
+		return fmt.Errorf("failed to save games to database: %w", err)
+	}
+
+	// Cleanup old games
+	if err := gs.db.CleanupOldGames(); err != nil {
+		log.Printf("Warning: failed to cleanup old games: %v", err)
+	}
+
+	log.Printf("Successfully saved %d games to database", len(games))
+	return nil
 }

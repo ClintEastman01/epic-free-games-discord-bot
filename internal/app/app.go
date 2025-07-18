@@ -7,6 +7,7 @@ import (
 	"free-games-scrape/internal/database"
 	"free-games-scrape/internal/logger"
 	"free-games-scrape/internal/metrics"
+	"free-games-scrape/internal/models"
 	"free-games-scrape/internal/ratelimit"
 	"free-games-scrape/internal/scraper"
 	"free-games-scrape/internal/security"
@@ -149,14 +150,28 @@ func (a *App) Run() error {
 
 // performGameCheck scrapes games and sends updates for new games only
 func (a *App) performGameCheck() error {
-	// Refresh games from Epic Games Store and save to database
-	if err := a.gameService.RefreshGames(); err != nil {
+	// Scrape games from Epic Games Store
+	scrapedGames, err := a.gameService.ScrapeGames()
+	if err != nil {
 		return err
 	}
 
-	// Get new games since last check
-	newGames, err := a.gameService.GetNewGamesSince(a.lastCheck)
+	if len(scrapedGames) == 0 {
+		log.Println("No games found during scraping")
+		return nil
+	}
+
+	// Get current games from database to compare
+	currentGames, err := a.gameService.GetActiveGames()
 	if err != nil {
+		return err
+	}
+
+	// Find truly new games by comparing scraped games with database
+	newGames := a.findNewGames(scrapedGames, currentGames)
+
+	// Save all scraped games to database (updates existing, adds new)
+	if err := a.gameService.SaveGames(scrapedGames); err != nil {
 		return err
 	}
 
@@ -175,5 +190,35 @@ func (a *App) performGameCheck() error {
 	a.lastCheck = time.Now()
 
 	return nil
+}
+
+// findNewGames compares scraped games with current database games to find truly new ones
+func (a *App) findNewGames(scrapedGames []models.Game, currentGames *models.GameCollection) *models.GameCollection {
+	// Create a map of existing games with their free-to dates for quick lookup
+	// Key format: "GameTitle|FreeTo" to handle cases where the same game becomes free again
+	existingGames := make(map[string]bool)
+	
+	// Add all current games to the map
+	for _, game := range currentGames.FreeNow {
+		key := game.Title + "|" + game.FreeTo
+		existingGames[key] = true
+	}
+	for _, game := range currentGames.ComingSoon {
+		key := game.Title + "|" + game.FreeTo
+		existingGames[key] = true
+	}
+
+	// Find games that are in scraped but not in existing with the same free-to date
+	var newGames []models.Game
+	for _, game := range scrapedGames {
+		key := game.Title + "|" + game.FreeTo
+		if !existingGames[key] {
+			newGames = append(newGames, game)
+			log.Printf("Found new game: %s (Status: %s, Free until: %s)", 
+				game.Title, game.Status, game.FreeTo)
+		}
+	}
+
+	return models.NewGameCollection(newGames)
 }
 
